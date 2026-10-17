@@ -3,7 +3,7 @@
 <title>买菜特价雷达</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <style>
-/* 工具页：每样菜一张卡片，先显示最便宜的两条，点一下展开全部 */
+/* 工具页：每样菜一张卡片，先显示最便宜的两条，点一下展开全部；默认英文，可切中文 */
 :root{
   --bg:#f3f6f2;--card:#fff;--ink:#1b1f1a;--muted:#646b62;--line:#dfe5dc;
   --accent:#2f7a3a;--good-soft:#e6f4e8;--warn:#b91c1c;--warn-soft:#fdecec;--chip:#ebefe8;
@@ -29,7 +29,10 @@ body{background:var(--bg);color:var(--ink);font:15px/1.5 -apple-system,"PingFang
 button{font:inherit;color:inherit}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
-.top{display:flex;align-items:center;gap:12px}
+.top{display:flex;align-items:flex-start;gap:10px}
+.top .sub{flex:1;min-width:0;margin-top:2px}
+.btns{display:flex;gap:6px;flex:none}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 h1{flex:1;min-width:0;font-size:22px;margin:0;text-wrap:balance}
 .btn{display:inline-flex;align-items:center;gap:5px;flex:none;padding:6px 12px;border:1px solid var(--line);border-radius:99px;
   background:var(--card);color:var(--ink);font-size:13px;line-height:1.2;cursor:pointer;white-space:nowrap}
@@ -97,46 +100,88 @@ h2.grp{font-size:13px;letter-spacing:.08em;color:var(--muted);font-weight:600;ma
 </style>
 
 <div class="wrap">
+  <h1 class="sr-only" id="h1">Grocery Deals Radar</h1>
   <div class="top">
-    <h1>买菜特价雷达</h1>
-    <button class="btn" id="refresh" type="button">
-      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5v3h-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      刷新
-    </button>
+    <div class="sub" id="status">Loading…</div>
+    <div class="btns">
+      <button class="btn" id="lang" type="button" lang="zh-CN">中文</button>
+      <button class="btn" id="refresh" type="button">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5v3h-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span id="refresh-txt">Refresh</span>
+      </button>
+    </div>
   </div>
-  <div class="sub" id="status">加载中…</div>
   <div class="flash" id="flash" role="status" hidden></div>
   <div class="tools">
-    <input class="search" id="q" type="search" placeholder="搜菜名或超市" aria-label="搜特价" autocomplete="off">
-    <button class="btn" id="expand-all" type="button" aria-pressed="false">全部展开</button>
+    <input class="search" id="q" type="search" autocomplete="off">
+    <button class="btn" id="expand-all" type="button" aria-pressed="false"></button>
   </div>
-  <nav class="cats" id="cats" aria-label="分类"></nav>
+  <nav class="cats" id="cats"></nav>
   <div id="list"></div>
   <div class="nores" id="nores" hidden></div>
-  <div class="hint">价格来自附近超市本周传单（Flipp），以门店为准。/lb 是每磅，1 斤约 1.1 磅；没写单位的一般按包或按件卖。点「刷新」会读取最近一次抓到的传单数据。</div>
+  <div class="hint" id="hint"></div>
 </div>
 
 <script>
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const WEEK = '日一二三四五六';
 const SLUG = {'牛奶':'milk','蔬菜':'veg','猪肉':'pork','牛肉':'beef','鸡肉':'chicken','海鲜':'seafood'};
-const LB_PER_JIN = 1.10231;   // 1 斤 = 500 g
-const SHOW = 2;               // 收起时每样菜显示几条
-const ALL_IF = 3;             // 不超过这么多条就全部显示，不用收起
+const GROUP_EN = {'牛奶':'Milk','蔬菜':'Vegetables','猪肉':'Pork','牛肉':'Beef','鸡肉':'Chicken','海鲜':'Seafood','其他':'Other'};
+const NAME_EN = {lactantia: 'Lactantia ultra-filtered milk', milk: 'Other filtered milk'};   // 配置里没写英文名的
+const LB_PER_JIN = 1.10231, LB_PER_KG = 2.20462;
+const SHOW = 2, ALL_IF = 3;
 const pad = n => String(n).padStart(2, '0');
 const md = d => `${d.getMonth()+1}/${d.getDate()}`;
-const wk = d => '周' + WEEK[d.getDay()];
 const hhmm = d => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 const dayStart = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 const dayDiff = (a, b) => Math.round((dayStart(a) - dayStart(b)) / 86400000);
 const money = v => '$' + Number(v).toFixed(2);
 const postal = s => String(s || '').toUpperCase().replace(/^([A-Z]\d[A-Z])\s*(\d[A-Z]\d)$/, '$1 $2');
+const both = (zh, en) => ({zh, en: en ?? zh});
+
+let lang = 'en';
+try { if (localStorage.getItem('lang') === 'zh') lang = 'zh'; } catch (e) {}
+
+const T = {
+  en: {
+    title: 'Grocery Deals Radar', search: 'Search item or store', expand: 'Expand all', collapse: 'Collapse all',
+    refresh: 'Refresh', switchTo: '中文', loadFail: 'Couldn’t load the deals. Please reload the page.',
+    day: d => `${'Sun Mon Tue Wed Thu Fri Sat'.split(' ')[d.getDay()]} ${md(d)}`,
+    summary: (n, s, pc) => `${n} deals · ${s} stores · near ${pc}`,
+    mostEnd: d => `Most end ${d}`, fetched: t => `Flyers fetched ${t}`, stale: a => `not updated for ${a} days`,
+    count: n => `${n}`, more: (n, r) => `${n} more${r ? `<span class="rng"> · ${r}</span>` : ''}`, less: 'Show less',
+    cheapest: 'Cheapest', none: 'No deals this week', ended: 'Deals ended', err: 'Couldn’t read data',
+    nores: q => `Nothing found for “${q}”.`, refreshed: t => `Updated to flyers fetched ${t}.`,
+    latest: t => `Already the latest data (fetched ${t}).`, refreshFail: 'Refresh failed. Please try again later.',
+    today: 'Ends today', tomorrow: 'Ends tomorrow', until: d => `Until ${d}`, starts: d => `Starts ${d}`,
+    seeFlyer: 'See flyer', from: 'from', ea: '/ea', alt: v => `≈${v}/kg`, altRate: LB_PER_KG, qty: n => `${n} for`,
+    hint: 'Prices come from this week’s flyers at nearby stores (via Flipp); the store’s shelf price wins. /lb means per pound; items without a unit are usually priced per pack or each. Refresh loads the most recently fetched flyer data.'
+  },
+  zh: {
+    title: '买菜特价雷达', search: '搜菜名或超市', expand: '全部展开', collapse: '全部收起',
+    refresh: '刷新', switchTo: 'EN', loadFail: '数据没加载出来，请稍后刷新页面。',
+    day: d => `${md(d)} 周${'日一二三四五六'[d.getDay()]}`,
+    summary: (n, s, pc) => `${n} 个特价 · ${s} 家超市 · 邮编 ${pc} 附近`,
+    mostEnd: d => `多数 ${d}截止`, fetched: t => `传单抓取于 ${t}`, stale: a => `已经 ${a} 天没更新`,
+    count: n => `${n} 个`, more: (n, r) => `还有 ${n} 个${r ? `<span class="rng"> · ${r}</span>` : ''}`, less: '收起',
+    cheapest: '最便宜', none: '这周没打折', ended: '这期特价已结束', err: '这次没读到数据',
+    nores: q => `没找到「${q}」，换个词试试。`, refreshed: t => `已换成 ${t} 抓到的最新传单。`,
+    latest: t => `已经是最新数据（${t} 抓取）。`, refreshFail: '没刷新成功，请稍后再试。',
+    today: '今天截止', tomorrow: '明天截止', until: d => `到 ${d}`, starts: d => `${d}开始`,
+    seeFlyer: '看传单', from: '起', ea: '/个', alt: v => `约${v}/斤`, altRate: LB_PER_JIN, qty: n => `${n} 个`,
+    hint: '价格来自附近超市本周传单（Flipp），以门店为准。/lb 是每磅，1 斤约 1.1 磅；没写单位的一般按包或按件卖。点「刷新」会读取最近一次抓到的传单数据。'
+  }
+};
+const t = () => T[lang];
 
 // "五花肉 Pork belly" → ["五花肉", "Pork belly"]
 function splitName(zh){
   const m = String(zh || '').match(/^(.*?[一-鿿][^A-Za-z]*?)\s+([A-Za-z].*)$/);
   return m ? [m[1], m[2]] : [String(zh || ''), ''];
+}
+function prodName(p){
+  const [cn, en] = splitName(p.zh);
+  return {cn, en: p.en || en || NAME_EN[p.q] || cn};
 }
 
 // 传单上全大写的名字改成正常大小写
@@ -155,33 +200,33 @@ function tidy(name){
   });
 }
 
-function preOf(t){
-  t = String(t || '').trim(); let m;
-  if ((m = t.match(/^(\d+)\s*for$/i))) return {qty: `${m[1]} 个`};
-  if (/^from$/i.test(t)) return {from: true};
+function preOf(s){
+  s = String(s || '').trim(); let m;
+  if ((m = s.match(/^(\d+)\s*for$/i))) return {qty: +m[1]};
+  if (/^from$/i.test(s)) return {from: true};
   return {};   // only / SALE 之类的不显示
 }
-function unitOf(t){
-  t = String(t || '').trim(); let m;
-  if (!t) return {};
-  if (/^\/?\s*lbs?\.?$/i.test(t)) return {unit: '/lb', lb: true};
-  if (/^\/?\s*(ea\.?|each)$/i.test(t)) return {unit: '/个'};
-  if (/scene\+\s*member/i.test(t)) return {note: 'Scene+ 会员价'};
-  if ((m = t.match(/over limit pay \$?([\d.]+)\s*ea/i))) return {note: `超出限购每个 $${m[1]}`};
-  return {note: t};
+function unitOf(s){
+  s = String(s || '').trim(); let m;
+  if (!s) return {};
+  if (/^\/?\s*lbs?\.?$/i.test(s)) return {unit: 'lb'};
+  if (/^\/?\s*(ea\.?|each)$/i.test(s)) return {unit: 'ea'};
+  if (/scene\+\s*member/i.test(s)) return {note: both('Scene+ 会员价', 'Scene+ member price')};
+  if ((m = s.match(/over limit pay \$?([\d.]+)\s*ea/i))) return {note: both(`超出限购每个 $${m[1]}`, `Over limit: $${m[1]} ea`)};
+  return {note: both(s)};
 }
 function storyOf(s){
   s = String(s || '').trim(); let m;
   if (!s || /^wow!?$/i.test(s)) return {};
-  if ((m = s.match(/^(?:you\s+)?save\s+(\d+)\s*%$/i))) return {save: `省 ${m[1]}%`};
-  if ((m = s.match(/^(?:get\s+)?(\d+)\s*%\s*off!?$/i))) { const n = +m[1]; return {save: n % 10 === 0 ? `${(100 - n) / 10} 折` : `省 ${n}%`}; }
-  if ((m = s.match(/^members?\s+save\s+\$([\d.]+)\s*\/\s*lb$/i))) return {save: `会员每磅省 $${m[1]}`};
-  if ((m = s.match(/^save\s+\$([\d.]+)$/i))) return {save: `省 $${m[1]}`};
-  if (/^buy\s*1\s*get\s*1/i.test(s)) return {save: '买一送一'};
-  if (/^air[\s-]*chilled$/i.test(s)) return {note: '风冷鸡'};
-  if ((m = s.match(/^(\d+)\s*scene\+\s*pts?\s+when you spend \$([\d.]+)/i))) return {note: `满 $${m[2]} 送 ${m[1]} Scene+ 积分`};
-  if ((m = s.match(/hotter price \$([\d.]+)\s*\/?\s*lb first (\d+)/i))) return {note: `App 里领券，前 ${m[2]} 份 $${m[1]}/lb`};
-  return {note: s};
+  if ((m = s.match(/^(?:you\s+)?save\s+(\d+)\s*%$/i))) return {save: both(`省 ${m[1]}%`, `Save ${m[1]}%`)};
+  if ((m = s.match(/^(?:get\s+)?(\d+)\s*%\s*off!?$/i))) { const n = +m[1]; return {save: both(n % 10 === 0 ? `${(100 - n) / 10} 折` : `省 ${n}%`, `${n}% off`)}; }
+  if ((m = s.match(/^members?\s+save\s+\$([\d.]+)\s*\/\s*lb$/i))) return {save: both(`会员每磅省 $${m[1]}`, `Members save $${m[1]}/lb`)};
+  if ((m = s.match(/^save\s+\$([\d.]+)$/i))) return {save: both(`省 $${m[1]}`, `Save $${m[1]}`)};
+  if (/^buy\s*1\s*get\s*1/i.test(s)) return {save: both('买一送一', 'Buy 1 get 1 free')};
+  if (/^air[\s-]*chilled$/i.test(s)) return {note: both('风冷鸡', 'Air chilled')};
+  if ((m = s.match(/^(\d+)\s*scene\+\s*pts?\s+when you spend \$([\d.]+)/i))) return {note: both(`满 $${m[2]} 送 ${m[1]} Scene+ 积分`, `${m[1]} Scene+ pts when you spend $${m[2]}+`)};
+  if ((m = s.match(/hotter price \$([\d.]+)\s*\/?\s*lb first (\d+)/i))) return {note: both(`App 里领券，前 ${m[2]} 份 $${m[1]}/lb`, `In-app offer: $${m[1]}/lb for the first ${m[2]}`)};
+  return {note: both(s)};
 }
 
 function shape(x){
@@ -190,53 +235,56 @@ function shape(x){
   const orig = x.original_price != null && price != null && x.original_price > price && x.original_price < price * 2 ? Number(x.original_price) : null;
   return {
     name: tidy(x.name), store: x.merchant_name || '', img: /^(data:image\/|https:)/.test(x.img || '') ? x.img : '',
-    price, orig, qty: pre.qty || '', from: !!pre.from, unit: post.unit || '', lb: !!post.lb,
-    save: st.save || '', notes: [post.note, st.note].filter(Boolean),
+    price, orig, qty: pre.qty || 0, from: !!pre.from, unit: post.unit || '',
+    save: st.save || null, notes: [post.note, st.note].filter(Boolean),
     start: new Date(x.valid_from), end: new Date(x.valid_to)
   };
 }
 
 // 大部分特价同一天截止，那天写在顶上；每行只标不一样的
 function whenOf(x, now, common){
-  if (x.start > now) return {txt: `${md(x.start)} ${wk(x.start)}开始`, cls: 'soon'};
+  if (x.start > now) return {txt: t().starts(t().day(x.start)), cls: 'soon'};
   const n = dayDiff(x.end, now);
-  if (n <= 0) return {txt: '今天截止', cls: 'hot'};
-  if (n === 1) return {txt: '明天截止', cls: 'hot'};
-  if (dayStart(x.end).getTime() !== common) return {txt: `到 ${md(x.end)} ${wk(x.end)}`, cls: ''};
+  if (n <= 0) return {txt: t().today, cls: 'hot'};
+  if (n === 1) return {txt: t().tomorrow, cls: 'hot'};
+  if (dayStart(x.end).getTime() !== common) return {txt: t().until(t().day(x.end)), cls: ''};
   return null;
 }
 
 function priceHTML(x){
-  if (x.price == null) return x.save ? `<b class="alt">${esc(x.save)}</b>` : '<span class="u">看传单</span>';
-  return (x.qty ? `<span class="u">${esc(x.qty)}</span> ` : '') + `<b>${money(x.price)}</b>`
-    + (x.unit ? `<span class="u">${esc(x.unit)}</span>` : '') + (x.from ? '<span class="u">起</span>' : '')
+  const L = t();
+  if (x.price == null) return x.save ? `<b class="alt">${esc(x.save[lang])}</b>` : `<span class="u">${L.seeFlyer}</span>`;
+  const unit = x.unit === 'lb' ? '/lb' : x.unit === 'ea' ? L.ea : '';
+  return (x.qty ? `<span class="u">${esc(L.qty(x.qty))}</span> ` : '') + `<b>${money(x.price)}</b>`
+    + (unit ? `<span class="u">${esc(unit)}</span>` : '') + (x.from ? `<span class="u"> ${L.from}</span>` : '')
     + (x.orig ? ` <s class="u">${money(x.orig)}</s>` : '')
-    + (x.lb ? `<div class="jin">约${money(x.price * LB_PER_JIN)}/斤</div>` : '');
+    + (x.unit === 'lb' ? `<div class="jin">${esc(L.alt(money(x.price * L.altRate)))}</div>` : '');
 }
 
 function dealHTML(x, best, extra, now, common){
   const w = whenOf(x, now, common);
-  const tags = (best ? '<span class="chip best">最便宜</span>' : '')
-    + (x.save && x.price != null ? `<span class="chip save">${esc(x.save)}</span>` : '')
+  const tags = (best ? `<span class="chip best">${t().cheapest}</span>` : '')
+    + (x.save && x.price != null ? `<span class="chip save">${esc(x.save[lang])}</span>` : '')
     + (w ? `<span class="chip ${w.cls}">${esc(w.txt)}</span>` : '');
-  return `<div class="deal${extra ? ' extra' : ''}" data-s="${esc((x.name + ' ' + x.store).toLowerCase())}">
+  const search = [x.name, x.store, x.save && x.save.zh, x.save && x.save.en].filter(Boolean).join(' ').toLowerCase();
+  return `<div class="deal${extra ? ' extra' : ''}" data-s="${esc(search)}">
     ${x.img ? `<img class="ph" src="${esc(x.img)}" alt="" loading="lazy" decoding="async">` : '<div class="ph"></div>'}
     <div class="info"><div class="nm">${esc(x.name)}</div>
-      <div class="st">${tags}<b>${esc(x.store)}</b>${x.notes.length ? ' · ' + x.notes.map(esc).join(' · ') : ''}</div></div>
+      <div class="st">${tags}<b>${esc(x.store)}</b>${x.notes.length ? ' · ' + x.notes.map(n => esc(n[lang])).join(' · ') : ''}</div></div>
     <div class="price">${priceHTML(x)}</div>
   </div>`;
 }
 
-const opened = new Set();   // 展开了的菜，刷新后保持
+const opened = new Set();
 let data = null, allOpen = false;
 
 function cardHTML(p, deals, id, now, common, group){
-  const [cn, en] = splitName(p.zh);
+  const L = t(), nm = prodName(p);
   const many = deals.length > ALL_IF, isOpen = many && opened.has(id);
-  const title = `${esc(cn)}${en ? ` <span class="en">${esc(en)}</span>` : ''}`;
+  const title = lang === 'zh' ? `${esc(nm.cn)}${nm.en !== nm.cn ? ` <span class="en">${esc(nm.en)}</span>` : ''}` : esc(nm.en);
   const head = many
-    ? `<h3 class="ch"><button type="button" class="toggle" aria-expanded="${isOpen}" aria-controls="${id}-rows"><span class="title">${title}</span><span class="cnt">${deals.length} 个 <span class="arr">▾</span></span></button></h3>`
-    : `<h3 class="ch"><span class="title">${title}</span><span class="cnt">${deals.length} 个</span></h3>`;
+    ? `<h3 class="ch"><button type="button" class="toggle" aria-expanded="${isOpen}" aria-controls="${id}-rows"><span class="title">${title}</span><span class="cnt">${L.count(deals.length)} <span class="arr">▾</span></span></button></h3>`
+    : `<h3 class="ch"><span class="title">${title}</span><span class="cnt">${L.count(deals.length)}</span></h3>`;
   const priced = deals.filter(x => x.price != null).length;
   const rows = deals.map((x, i) => dealHTML(x, i === 0 && priced > 1 && x.price != null, many && i >= SHOW, now, common)).join('');
   let more = '';
@@ -244,20 +292,39 @@ function cardHTML(p, deals, id, now, common, group){
     const rest = deals.slice(SHOW), ps = rest.map(x => x.price).filter(v => v != null);
     const lo = Math.min(...ps), hi = Math.max(...ps);
     const rng = ps.length ? (lo === hi ? money(lo) : `${money(lo)}–${money(hi)}`) : '';
-    more = `<button type="button" class="more toggle" aria-expanded="${isOpen}" aria-controls="${id}-rows"><span class="lbl-closed">还有 ${rest.length} 个${rng ? `<span class="rng"> · ${rng}</span>` : ''} ▾</span><span class="lbl-open">收起 ▴</span></button>`;
+    more = `<button type="button" class="more toggle" aria-expanded="${isOpen}" aria-controls="${id}-rows"><span class="lbl-closed">${L.more(rest.length, rng)} ▾</span><span class="lbl-open">${L.less} ▴</span></button>`;
   }
-  return `<div class="card${many ? ' has-more' : ''}${isOpen ? ' open' : ''}" id="${id}" data-s="${esc((p.zh + ' ' + group).toLowerCase())}">${head}<div class="rows" id="${id}-rows">${rows}</div>${more}</div>`;
+  const search = [p.zh, nm.en, group, GROUP_EN[group]].filter(Boolean).join(' ').toLowerCase();
+  return `<div class="card${many ? ' has-more' : ''}${isOpen ? ' open' : ''}" id="${id}" data-s="${esc(search)}">${head}<div class="rows" id="${id}-rows">${rows}</div>${more}</div>`;
 }
 
 function skipHTML(G){
   const by = new Map();
   G.skips.forEach(s => { if (!by.has(s.why)) by.set(s.why, []); by.get(s.why).push(s.p); });
-  return [...by].map(([why, ps]) => `<p class="skip" data-s="${esc(ps.map(p => p.zh).join(' ').toLowerCase())}">${why}：${ps.map(p => esc(splitName(p.zh)[0])).join('、')}</p>`).join('');
+  return [...by].map(([why, ps]) => {
+    const names = ps.map(p => { const nm = prodName(p); return lang === 'zh' ? nm.cn : nm.en; });
+    const search = ps.map(p => p.zh + ' ' + prodName(p).en).join(' ').toLowerCase();
+    return `<p class="skip" data-s="${esc(search)}">${esc(t()[why])}${lang === 'zh' ? '：' : ': '}${names.map(esc).join(lang === 'zh' ? '、' : ', ')}</p>`;
+  }).join('');
+}
+
+function applyStatic(){
+  const L = t();
+  document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
+  document.title = L.title;
+  $('#h1').textContent = L.title;
+  $('#lang').textContent = L.switchTo;
+  $('#lang').setAttribute('lang', lang === 'zh' ? 'en' : 'zh-CN');
+  $('#refresh-txt').textContent = L.refresh;
+  $('#q').placeholder = L.search;
+  $('#q').setAttribute('aria-label', L.search);
+  $('#expand-all').textContent = allOpen ? L.collapse : L.expand;
+  $('#hint').textContent = L.hint;
 }
 
 function render(d){
   data = d;
-  const now = new Date(), stores = new Set(), ends = new Map(), groups = [];
+  const L = t(), now = new Date(), stores = new Set(), ends = new Map(), groups = [];
   let total = 0;
   const prods = (d.products || []).map((p, i) => {
     const deals = (p.deals || []).map(shape).filter(x => x.end > now)
@@ -276,24 +343,25 @@ function render(d){
     let G = groups[groups.length - 1];
     if (!G || G.name !== name) { G = {name, id: 'g-' + (SLUG[name] || groups.length), cards: [], skips: [], n: 0}; groups.push(G); }
     if (deals.length) G.cards.push(cardHTML(p, deals, id, now, common, name));
-    else G.skips.push({p, why: p.error ? '这次没读到数据' : (p.deals || []).length ? '这期特价已结束' : '这周没打折'});
+    else G.skips.push({p, why: p.error ? 'err' : (p.deals || []).length ? 'ended' : 'none'});
     G.n += deals.length;
   });
+  const gName = G => lang === 'zh' ? G.name : (GROUP_EN[G.name] || G.name);
 
-  $('#cats').innerHTML = groups.map(G => `<a href="#${G.id}">${esc(G.name)}<span>${G.n}</span></a>`).join('');
-  $('#list').innerHTML = groups.map(G => `<section class="grp-block" id="${G.id}"><h2 class="grp">${esc(G.name)}</h2>`
+  $('#cats').innerHTML = groups.map(G => `<a href="#${G.id}">${esc(gName(G))}<span>${G.n}</span></a>`).join('');
+  $('#list').innerHTML = groups.map(G => `<section class="grp-block" id="${G.id}"><h2 class="grp">${esc(gName(G))}</h2>`
     + (G.cards.length ? `<div class="cards">${G.cards.join('')}</div>` : '') + skipHTML(G) + '</section>').join('');
   $('#expand-all').hidden = !document.querySelector('.card.has-more');
 
-  const t = new Date(d.fetchedAt), line2 = [];
-  if (common != null) { const c = new Date(common); line2.push(`多数 ${md(c)} ${wk(c)}截止`); }
+  const ft = new Date(d.fetchedAt), line2 = [];
+  if (common != null) line2.push(L.mostEnd(L.day(new Date(common))));
   let stale = '';
-  if (!isNaN(t)) {
-    line2.push(`传单抓取于 ${md(t)} ${hhmm(t)}`);
-    const age = Math.floor((now - t) / 86400000);
-    if (age >= 3) stale = ` · <span class="stale">已经 ${age} 天没更新</span>`;
+  if (!isNaN(ft)) {
+    line2.push(L.fetched(`${md(ft)} ${hhmm(ft)}`));
+    const age = Math.floor((now - ft) / 86400000);
+    if (age >= 3) stale = ` · <span class="stale">${esc(L.stale(age))}</span>`;
   }
-  $('#status').innerHTML = `<div>${esc(`${total} 个特价 · ${stores.size} 家超市 · 邮编 ${postal(d.postal)} 附近`)}</div><div>${line2.map(esc).join(' · ')}${stale}</div>`;
+  $('#status').innerHTML = `<div>${esc(L.summary(total, stores.size, postal(d.postal)))}</div><div>${line2.map(esc).join(' · ')}${stale}</div>`;
   applySearch();
 }
 
@@ -321,7 +389,7 @@ function applySearch(){
     shown += n;
   });
   $('#nores').hidden = !q || shown > 0;
-  $('#nores').textContent = `没找到「${raw}」，换个词试试。`;
+  $('#nores').textContent = t().nores(raw);
 }
 
 function flash(s){
@@ -338,9 +406,9 @@ async function load(fresh){
 }
 
 document.addEventListener('click', e => {
-  const t = e.target.closest('.toggle');
-  if (!t) return;
-  const card = t.closest('.card'), on = !card.classList.contains('open');
+  const b = e.target.closest('.toggle');
+  if (!b) return;
+  const card = b.closest('.card'), on = !card.classList.contains('open');
   setOpen(card, on);
   if (!on && card.getBoundingClientRect().top < 0) card.scrollIntoView({block: 'start'});
 });
@@ -348,8 +416,15 @@ document.addEventListener('click', e => {
 $('#expand-all').addEventListener('click', () => {
   allOpen = !allOpen;
   document.querySelectorAll('.card.has-more').forEach(c => setOpen(c, allOpen));
-  $('#expand-all').textContent = allOpen ? '全部收起' : '全部展开';
+  $('#expand-all').textContent = allOpen ? t().collapse : t().expand;
   $('#expand-all').setAttribute('aria-pressed', String(allOpen));
+});
+
+$('#lang').addEventListener('click', () => {
+  lang = lang === 'en' ? 'zh' : 'en';
+  try { localStorage.setItem('lang', lang); } catch (e) {}
+  applyStatic();
+  if (data) render(data);
 });
 
 $('#q').addEventListener('input', applySearch);
@@ -360,14 +435,15 @@ $('#refresh').addEventListener('click', async () => {
   try {
     const d = await load(true);
     render(d);
-    const t = new Date(d.fetchedAt), when = isNaN(t) ? '' : `${md(t)} ${hhmm(t)}`;
-    flash(d.fetchedAt !== before ? `已换成 ${when} 抓到的最新传单。` : `已经是最新数据（${when} 抓取）。`);
+    const ft = new Date(d.fetchedAt), when = isNaN(ft) ? '' : `${md(ft)} ${hhmm(ft)}`;
+    flash(d.fetchedAt !== before ? t().refreshed(when) : t().latest(when));
   } catch (err) {
-    flash('没刷新成功，请稍后再试。');
+    flash(t().refreshFail);
   } finally {
     b.disabled = false; b.classList.remove('busy');
   }
 });
 
-load(false).then(render).catch(() => { $('#status').textContent = '数据没加载出来，请稍后刷新页面。'; });
+applyStatic();
+load(false).then(render).catch(() => { $('#status').textContent = t().loadFail; });
 </script>
