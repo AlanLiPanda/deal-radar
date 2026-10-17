@@ -1,0 +1,373 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>买菜特价雷达</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* 工具页：每样菜一张卡片，先显示最便宜的两条，点一下展开全部 */
+:root{
+  --bg:#f3f6f2;--card:#fff;--ink:#1b1f1a;--muted:#646b62;--line:#dfe5dc;
+  --accent:#2f7a3a;--good-soft:#e6f4e8;--warn:#b91c1c;--warn-soft:#fdecec;--chip:#ebefe8;
+  --info:#1d4ed8;--info-soft:#e7eefc;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#131612;--card:#1c201b;--ink:#eef2ec;--muted:#9ba395;--line:#2f352d;
+    --accent:#6cc47a;--good-soft:#1a3020;--warn:#f87171;--warn-soft:#3a1a1a;--chip:#272c25;
+    --info:#93b4ff;--info-soft:#1c2740;color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#131612;--card:#1c201b;--ink:#eef2ec;--muted:#9ba395;--line:#2f352d;
+  --accent:#6cc47a;--good-soft:#1a3020;--warn:#f87171;--warn-soft:#3a1a1a;--chip:#272c25;
+  --info:#93b4ff;--info-soft:#1c2740;color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 -apple-system,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));padding-block:14px}
+.wrap{max-width:760px;margin:0 auto}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.top{display:flex;align-items:center;gap:12px}
+h1{flex:1;min-width:0;font-size:22px;margin:0;text-wrap:balance}
+.btn{display:inline-flex;align-items:center;gap:5px;flex:none;padding:6px 12px;border:1px solid var(--line);border-radius:99px;
+  background:var(--card);color:var(--ink);font-size:13px;line-height:1.2;cursor:pointer;white-space:nowrap}
+.btn svg{width:14px;height:14px}
+.btn:disabled{opacity:.6;cursor:default}
+.sub{color:var(--muted);font-size:12px;line-height:1.5;margin-top:4px}
+.stale{color:var(--warn);font-weight:600}
+.flash{margin-top:4px;color:var(--accent);font-size:12px;font-weight:600}
+.tools{display:flex;align-items:center;gap:8px;margin-top:10px}
+.search{flex:1;min-width:0;padding:7px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);
+  font-family:inherit;font-size:16px;line-height:1.3}
+.cats{position:sticky;top:env(safe-area-inset-top, 0px);z-index:5;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;
+  padding:8px 0;background:var(--bg);box-shadow:0 1px 0 var(--line)}
+.cats::-webkit-scrollbar{display:none}
+.cats a{flex:none;padding:3px 11px;border:1px solid var(--line);border-radius:99px;background:var(--card);color:var(--ink);font-size:13px;text-decoration:none;white-space:nowrap}
+.cats a span{margin-left:4px;color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+
+.grp-block,.card{scroll-margin-top:calc(env(safe-area-inset-top, 0px) + 52px)}
+h2.grp{font-size:13px;letter-spacing:.08em;color:var(--muted);font-weight:600;margin:16px 0 6px}
+.cards{display:grid;gap:8px;align-items:start}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 12px 2px;min-width:0}
+.ch{display:flex;align-items:baseline;gap:8px;margin:0;padding:2px 0 6px;font-size:15px}
+.ch .toggle{display:flex;align-items:baseline;gap:8px;width:100%;padding:0;border:0;background:none;text-align:left;cursor:pointer;font-weight:700}
+.ch .title{flex:1;min-width:0}
+.en{color:var(--muted);font-size:13px;font-weight:400}
+.cnt{margin-left:auto;flex:none;color:var(--muted);font-size:12px;font-weight:400}
+.arr{display:inline-block;transition:transform .15s}
+.card.open .arr{transform:rotate(180deg)}
+
+.deal{display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:2px 10px;align-items:start;padding:7px 0;border-top:1px solid var(--line)}
+.card:not(.open) .deal.extra{display:none}
+#list.searching .deal.extra{display:grid}
+.ph{width:40px;height:40px;object-fit:contain;background:#fff;border-radius:6px}
+.info{min-width:0}
+.nm{font-size:13px;line-height:1.35;overflow-wrap:anywhere}
+.st{font-size:12px;line-height:1.45;color:var(--muted);margin-top:1px}
+.st b{font-weight:600}
+.price{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;line-height:1.25}
+.price b{font-size:16px;color:var(--accent)}
+.price b.alt{font-size:14px}
+.price .u{font-size:11px;color:var(--muted);margin-left:1px}
+.price .jin{font-size:11px;color:var(--muted)}
+.chip{display:inline-block;font-size:11px;line-height:1.5;padding:0 6px;border-radius:99px;background:var(--chip);margin-right:4px}
+.chip.hot{background:var(--warn-soft);color:var(--warn);font-weight:600}
+.chip.best{background:var(--good-soft);color:var(--accent);font-weight:600}
+.chip.save{background:var(--good-soft);color:var(--accent)}
+.chip.soon{background:var(--info-soft);color:var(--info);font-weight:600}
+.more{display:block;width:100%;padding:6px 0 7px;border:0;border-top:1px solid var(--line);background:none;color:var(--accent);font-size:13px;text-align:left;cursor:pointer}
+.more .rng{color:var(--muted)}
+.more .lbl-open,.card.open .more .lbl-closed{display:none}
+.card.open .more .lbl-open{display:inline}
+#list.searching .more{display:none}
+.skip{margin:6px 2px 0;color:var(--muted);font-size:12px}
+.nores{color:var(--muted);font-size:14px;padding:24px 0;text-align:center}
+.hint{margin-top:16px;font-size:12px;color:var(--muted)}
+
+@media (min-width:900px){
+  .wrap{max-width:1000px}
+  .cards{grid-template-columns:1fr 1fr}
+}
+@media (prefers-reduced-motion: no-preference){
+  .btn.busy svg{animation:spin .8s linear infinite}
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+
+<div class="wrap">
+  <div class="top">
+    <h1>买菜特价雷达</h1>
+    <button class="btn" id="refresh" type="button">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5v3h-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      刷新
+    </button>
+  </div>
+  <div class="sub" id="status">加载中…</div>
+  <div class="flash" id="flash" role="status" hidden></div>
+  <div class="tools">
+    <input class="search" id="q" type="search" placeholder="搜菜名或超市" aria-label="搜特价" autocomplete="off">
+    <button class="btn" id="expand-all" type="button" aria-pressed="false">全部展开</button>
+  </div>
+  <nav class="cats" id="cats" aria-label="分类"></nav>
+  <div id="list"></div>
+  <div class="nores" id="nores" hidden></div>
+  <div class="hint">价格来自附近超市本周传单（Flipp），以门店为准。/lb 是每磅，1 斤约 1.1 磅；没写单位的一般按包或按件卖。点「刷新」会读取最近一次抓到的传单数据。</div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const WEEK = '日一二三四五六';
+const SLUG = {'牛奶':'milk','蔬菜':'veg','猪肉':'pork','牛肉':'beef','鸡肉':'chicken','海鲜':'seafood'};
+const LB_PER_JIN = 1.10231;   // 1 斤 = 500 g
+const SHOW = 2;               // 收起时每样菜显示几条
+const ALL_IF = 3;             // 不超过这么多条就全部显示，不用收起
+const pad = n => String(n).padStart(2, '0');
+const md = d => `${d.getMonth()+1}/${d.getDate()}`;
+const wk = d => '周' + WEEK[d.getDay()];
+const hhmm = d => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const dayStart = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+const dayDiff = (a, b) => Math.round((dayStart(a) - dayStart(b)) / 86400000);
+const money = v => '$' + Number(v).toFixed(2);
+const postal = s => String(s || '').toUpperCase().replace(/^([A-Z]\d[A-Z])\s*(\d[A-Z]\d)$/, '$1 $2');
+
+// "五花肉 Pork belly" → ["五花肉", "Pork belly"]
+function splitName(zh){
+  const m = String(zh || '').match(/^(.*?[一-鿿][^A-Za-z]*?)\s+([A-Za-z].*)$/);
+  return m ? [m[1], m[2]] : [String(zh || ''), ''];
+}
+
+// 传单上全大写的名字改成正常大小写
+const KEEP = new Set(['PC','AAA','AA','BBQ','RWA','USA','BC']);
+const SMALL = new Set(['OR','OF','AND','IN','WITH','THE','FOR','TO','ON']);
+function tidy(name){
+  const s = String(name || '').replace(/\s+/g, ' ').trim();
+  const letters = s.replace(/[^A-Za-z]/g, '').length;
+  const shouty = letters > 0 && s.replace(/[^A-Z]/g, '').length / letters > 0.5;
+  return s.replace(/\b[A-Z][A-Z']+\b/g, (w, i) => {
+    if (KEEP.has(w)) return w;
+    if (w === 'LB') return 'lb';
+    if (!shouty && w.length < 4) return w;
+    if (SMALL.has(w) && i > 0) return w.toLowerCase();
+    return w[0] + w.slice(1).toLowerCase();
+  });
+}
+
+function preOf(t){
+  t = String(t || '').trim(); let m;
+  if ((m = t.match(/^(\d+)\s*for$/i))) return {qty: `${m[1]} 个`};
+  if (/^from$/i.test(t)) return {from: true};
+  return {};   // only / SALE 之类的不显示
+}
+function unitOf(t){
+  t = String(t || '').trim(); let m;
+  if (!t) return {};
+  if (/^\/?\s*lbs?\.?$/i.test(t)) return {unit: '/lb', lb: true};
+  if (/^\/?\s*(ea\.?|each)$/i.test(t)) return {unit: '/个'};
+  if (/scene\+\s*member/i.test(t)) return {note: 'Scene+ 会员价'};
+  if ((m = t.match(/over limit pay \$?([\d.]+)\s*ea/i))) return {note: `超出限购每个 $${m[1]}`};
+  return {note: t};
+}
+function storyOf(s){
+  s = String(s || '').trim(); let m;
+  if (!s || /^wow!?$/i.test(s)) return {};
+  if ((m = s.match(/^(?:you\s+)?save\s+(\d+)\s*%$/i))) return {save: `省 ${m[1]}%`};
+  if ((m = s.match(/^(?:get\s+)?(\d+)\s*%\s*off!?$/i))) { const n = +m[1]; return {save: n % 10 === 0 ? `${(100 - n) / 10} 折` : `省 ${n}%`}; }
+  if ((m = s.match(/^members?\s+save\s+\$([\d.]+)\s*\/\s*lb$/i))) return {save: `会员每磅省 $${m[1]}`};
+  if ((m = s.match(/^save\s+\$([\d.]+)$/i))) return {save: `省 $${m[1]}`};
+  if (/^buy\s*1\s*get\s*1/i.test(s)) return {save: '买一送一'};
+  if (/^air[\s-]*chilled$/i.test(s)) return {note: '风冷鸡'};
+  if ((m = s.match(/^(\d+)\s*scene\+\s*pts?\s+when you spend \$([\d.]+)/i))) return {note: `满 $${m[2]} 送 ${m[1]} Scene+ 积分`};
+  if ((m = s.match(/hotter price \$([\d.]+)\s*\/?\s*lb first (\d+)/i))) return {note: `App 里领券，前 ${m[2]} 份 $${m[1]}/lb`};
+  return {note: s};
+}
+
+function shape(x){
+  const pre = preOf(x.pre_price_text), post = unitOf(x.post_price_text), st = storyOf(x.sale_story);
+  const price = x.current_price == null ? null : Number(x.current_price);
+  const orig = x.original_price != null && price != null && x.original_price > price && x.original_price < price * 2 ? Number(x.original_price) : null;
+  return {
+    name: tidy(x.name), store: x.merchant_name || '', img: /^(data:image\/|https:)/.test(x.img || '') ? x.img : '',
+    price, orig, qty: pre.qty || '', from: !!pre.from, unit: post.unit || '', lb: !!post.lb,
+    save: st.save || '', notes: [post.note, st.note].filter(Boolean),
+    start: new Date(x.valid_from), end: new Date(x.valid_to)
+  };
+}
+
+// 大部分特价同一天截止，那天写在顶上；每行只标不一样的
+function whenOf(x, now, common){
+  if (x.start > now) return {txt: `${md(x.start)} ${wk(x.start)}开始`, cls: 'soon'};
+  const n = dayDiff(x.end, now);
+  if (n <= 0) return {txt: '今天截止', cls: 'hot'};
+  if (n === 1) return {txt: '明天截止', cls: 'hot'};
+  if (dayStart(x.end).getTime() !== common) return {txt: `到 ${md(x.end)} ${wk(x.end)}`, cls: ''};
+  return null;
+}
+
+function priceHTML(x){
+  if (x.price == null) return x.save ? `<b class="alt">${esc(x.save)}</b>` : '<span class="u">看传单</span>';
+  return (x.qty ? `<span class="u">${esc(x.qty)}</span> ` : '') + `<b>${money(x.price)}</b>`
+    + (x.unit ? `<span class="u">${esc(x.unit)}</span>` : '') + (x.from ? '<span class="u">起</span>' : '')
+    + (x.orig ? ` <s class="u">${money(x.orig)}</s>` : '')
+    + (x.lb ? `<div class="jin">约${money(x.price * LB_PER_JIN)}/斤</div>` : '');
+}
+
+function dealHTML(x, best, extra, now, common){
+  const w = whenOf(x, now, common);
+  const tags = (best ? '<span class="chip best">最便宜</span>' : '')
+    + (x.save && x.price != null ? `<span class="chip save">${esc(x.save)}</span>` : '')
+    + (w ? `<span class="chip ${w.cls}">${esc(w.txt)}</span>` : '');
+  return `<div class="deal${extra ? ' extra' : ''}" data-s="${esc((x.name + ' ' + x.store).toLowerCase())}">
+    ${x.img ? `<img class="ph" src="${esc(x.img)}" alt="" loading="lazy" decoding="async">` : '<div class="ph"></div>'}
+    <div class="info"><div class="nm">${esc(x.name)}</div>
+      <div class="st">${tags}<b>${esc(x.store)}</b>${x.notes.length ? ' · ' + x.notes.map(esc).join(' · ') : ''}</div></div>
+    <div class="price">${priceHTML(x)}</div>
+  </div>`;
+}
+
+const opened = new Set();   // 展开了的菜，刷新后保持
+let data = null, allOpen = false;
+
+function cardHTML(p, deals, id, now, common, group){
+  const [cn, en] = splitName(p.zh);
+  const many = deals.length > ALL_IF, isOpen = many && opened.has(id);
+  const title = `${esc(cn)}${en ? ` <span class="en">${esc(en)}</span>` : ''}`;
+  const head = many
+    ? `<h3 class="ch"><button type="button" class="toggle" aria-expanded="${isOpen}" aria-controls="${id}-rows"><span class="title">${title}</span><span class="cnt">${deals.length} 个 <span class="arr">▾</span></span></button></h3>`
+    : `<h3 class="ch"><span class="title">${title}</span><span class="cnt">${deals.length} 个</span></h3>`;
+  const priced = deals.filter(x => x.price != null).length;
+  const rows = deals.map((x, i) => dealHTML(x, i === 0 && priced > 1 && x.price != null, many && i >= SHOW, now, common)).join('');
+  let more = '';
+  if (many) {
+    const rest = deals.slice(SHOW), ps = rest.map(x => x.price).filter(v => v != null);
+    const lo = Math.min(...ps), hi = Math.max(...ps);
+    const rng = ps.length ? (lo === hi ? money(lo) : `${money(lo)}–${money(hi)}`) : '';
+    more = `<button type="button" class="more toggle" aria-expanded="${isOpen}" aria-controls="${id}-rows"><span class="lbl-closed">还有 ${rest.length} 个${rng ? `<span class="rng"> · ${rng}</span>` : ''} ▾</span><span class="lbl-open">收起 ▴</span></button>`;
+  }
+  return `<div class="card${many ? ' has-more' : ''}${isOpen ? ' open' : ''}" id="${id}" data-s="${esc((p.zh + ' ' + group).toLowerCase())}">${head}<div class="rows" id="${id}-rows">${rows}</div>${more}</div>`;
+}
+
+function skipHTML(G){
+  const by = new Map();
+  G.skips.forEach(s => { if (!by.has(s.why)) by.set(s.why, []); by.get(s.why).push(s.p); });
+  return [...by].map(([why, ps]) => `<p class="skip" data-s="${esc(ps.map(p => p.zh).join(' ').toLowerCase())}">${why}：${ps.map(p => esc(splitName(p.zh)[0])).join('、')}</p>`).join('');
+}
+
+function render(d){
+  data = d;
+  const now = new Date(), stores = new Set(), ends = new Map(), groups = [];
+  let total = 0;
+  const prods = (d.products || []).map((p, i) => {
+    const deals = (p.deals || []).map(shape).filter(x => x.end > now)
+      .sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity) || 0);
+    deals.forEach(x => {
+      total++; stores.add(x.store);
+      if (x.start <= now) { const k = dayStart(x.end).getTime(); ends.set(k, (ends.get(k) || 0) + 1); }
+    });
+    return {p, deals, id: 'p' + i};
+  });
+  let common = null, most = 0;
+  for (const [k, n] of ends) if (n > most) { most = n; common = k; }
+
+  prods.forEach(({p, deals, id}) => {
+    const name = p.group || '其他';
+    let G = groups[groups.length - 1];
+    if (!G || G.name !== name) { G = {name, id: 'g-' + (SLUG[name] || groups.length), cards: [], skips: [], n: 0}; groups.push(G); }
+    if (deals.length) G.cards.push(cardHTML(p, deals, id, now, common, name));
+    else G.skips.push({p, why: p.error ? '这次没读到数据' : (p.deals || []).length ? '这期特价已结束' : '这周没打折'});
+    G.n += deals.length;
+  });
+
+  $('#cats').innerHTML = groups.map(G => `<a href="#${G.id}">${esc(G.name)}<span>${G.n}</span></a>`).join('');
+  $('#list').innerHTML = groups.map(G => `<section class="grp-block" id="${G.id}"><h2 class="grp">${esc(G.name)}</h2>`
+    + (G.cards.length ? `<div class="cards">${G.cards.join('')}</div>` : '') + skipHTML(G) + '</section>').join('');
+  $('#expand-all').hidden = !document.querySelector('.card.has-more');
+
+  const t = new Date(d.fetchedAt), line2 = [];
+  if (common != null) { const c = new Date(common); line2.push(`多数 ${md(c)} ${wk(c)}截止`); }
+  let stale = '';
+  if (!isNaN(t)) {
+    line2.push(`传单抓取于 ${md(t)} ${hhmm(t)}`);
+    const age = Math.floor((now - t) / 86400000);
+    if (age >= 3) stale = ` · <span class="stale">已经 ${age} 天没更新</span>`;
+  }
+  $('#status').innerHTML = `<div>${esc(`${total} 个特价 · ${stores.size} 家超市 · 邮编 ${postal(d.postal)} 附近`)}</div><div>${line2.map(esc).join(' · ')}${stale}</div>`;
+  applySearch();
+}
+
+function setOpen(card, on){
+  card.classList.toggle('open', on);
+  card.querySelectorAll('.toggle').forEach(b => b.setAttribute('aria-expanded', String(on)));
+  if (on) opened.add(card.id); else opened.delete(card.id);
+}
+
+function applySearch(){
+  const raw = $('#q').value.trim(), q = raw.toLowerCase();
+  $('#list').classList.toggle('searching', !!q);
+  let shown = 0;
+  document.querySelectorAll('.grp-block').forEach(block => {
+    let n = 0;
+    block.querySelectorAll('.card').forEach(card => {
+      const hitCard = !q || card.dataset.s.includes(q);
+      let rows = 0;
+      card.querySelectorAll('.deal').forEach(r => { r.hidden = !(hitCard || r.dataset.s.includes(q)); if (!r.hidden) rows++; });
+      card.hidden = !hitCard && rows === 0;
+      if (!card.hidden) n++;
+    });
+    block.querySelectorAll('.skip').forEach(s => { s.hidden = !!q && !s.dataset.s.includes(q); if (!s.hidden) n++; });
+    block.hidden = n === 0;
+    shown += n;
+  });
+  $('#nores').hidden = !q || shown > 0;
+  $('#nores').textContent = `没找到「${raw}」，换个词试试。`;
+}
+
+function flash(s){
+  const f = $('#flash');
+  f.textContent = s; f.hidden = !s;
+  clearTimeout(flash.t);
+  if (s) flash.t = setTimeout(() => { f.hidden = true; }, 6000);
+}
+
+async function load(fresh){
+  const r = await fetch('data.json', fresh ? {cache: 'reload'} : undefined);
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+
+document.addEventListener('click', e => {
+  const t = e.target.closest('.toggle');
+  if (!t) return;
+  const card = t.closest('.card'), on = !card.classList.contains('open');
+  setOpen(card, on);
+  if (!on && card.getBoundingClientRect().top < 0) card.scrollIntoView({block: 'start'});
+});
+
+$('#expand-all').addEventListener('click', () => {
+  allOpen = !allOpen;
+  document.querySelectorAll('.card.has-more').forEach(c => setOpen(c, allOpen));
+  $('#expand-all').textContent = allOpen ? '全部收起' : '全部展开';
+  $('#expand-all').setAttribute('aria-pressed', String(allOpen));
+});
+
+$('#q').addEventListener('input', applySearch);
+
+$('#refresh').addEventListener('click', async () => {
+  const b = $('#refresh'), before = data && data.fetchedAt;
+  b.disabled = true; b.classList.add('busy'); flash('');
+  try {
+    const d = await load(true);
+    render(d);
+    const t = new Date(d.fetchedAt), when = isNaN(t) ? '' : `${md(t)} ${hhmm(t)}`;
+    flash(d.fetchedAt !== before ? `已换成 ${when} 抓到的最新传单。` : `已经是最新数据（${when} 抓取）。`);
+  } catch (err) {
+    flash('没刷新成功，请稍后再试。');
+  } finally {
+    b.disabled = false; b.classList.remove('busy');
+  }
+});
+
+load(false).then(render).catch(() => { $('#status').textContent = '数据没加载出来，请稍后刷新页面。'; });
+</script>

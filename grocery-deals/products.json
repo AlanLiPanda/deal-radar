@@ -1,0 +1,117 @@
+{
+ "postal": "V6X1A1",
+ "products": [
+  {
+   "group": "牛奶",
+   "zh": "Lactantia 超滤牛奶",
+   "q": "lactantia",
+   "must": "lactantia",
+   "ex": "cream,condensed,cheese,butter,yogurt,sour,evaporated"
+  },
+  {
+   "group": "牛奶",
+   "zh": "其他超滤 / 微滤牛奶",
+   "q": "milk",
+   "must": "filtered",
+   "ex": "water"
+  },
+  {
+   "group": "蔬菜",
+   "zh": "葱 Green onion",
+   "q": "green onion",
+   "must": "green onion",
+   "ex": "cracker,pancake,chip,dip,sauce,soup,noodle,dumpling"
+  },
+  {
+   "group": "蔬菜",
+   "zh": "彩椒 Peppers",
+   "q": "peppers",
+   "must": "pepper",
+   "ex": "jalapeño,jalapeno,paneer,black pepper,chili,chilli,sauce,dip,seasoning,cheese,pepperoni,dr pepper,salt,corn,steak,jerky,flakes"
+  },
+  {
+   "group": "猪肉",
+   "zh": "五花肉 Pork belly",
+   "q": "pork belly",
+   "must": "pork belly",
+   "ex": "bacon,sauce"
+  },
+  {
+   "group": "猪肉",
+   "zh": "排骨 Pork ribs",
+   "q": "pork ribs",
+   "must": "pork,rib",
+   "ex": "cutlette,rib style,sauce,cooked,bbq sauce"
+  },
+  {
+   "group": "猪肉",
+   "zh": "猪里脊 Pork loin",
+   "q": "pork loin",
+   "must": "pork,loin",
+   "ex": "bacon,cooked"
+  },
+  {
+   "group": "猪肉",
+   "zh": "猪肉馅 Ground pork",
+   "q": "ground pork",
+   "must": "ground,pork",
+   "ex": "sausage"
+  },
+  {
+   "group": "牛肉",
+   "zh": "牛腩 Beef brisket",
+   "q": "beef brisket",
+   "must": "brisket",
+   "ex": "cooked,smoked,sandwich"
+  },
+  {
+   "group": "牛肉",
+   "zh": "肥牛片 Sliced beef",
+   "q": "sliced beef",
+   "must": "beef,slice",
+   "ex": "liver,deli,jerky,cooked,roast beef sandwich"
+  },
+  {
+   "group": "牛肉",
+   "zh": "牛排 Steak",
+   "q": "steak",
+   "must": "steak",
+   "ex": "jack link,pepperoni,philly,strips,burger,sauce,spice,seasoning,salmon,tuna,cauliflower,fries,spice,marinade,pie,lamb"
+  },
+  {
+   "group": "牛肉",
+   "zh": "牛肉馅 Ground beef",
+   "q": "ground beef",
+   "must": "ground beef",
+   "ex": "burger,patties,lasagna,meatball"
+  },
+  {
+   "group": "鸡肉",
+   "zh": "鸡腿 Chicken thighs",
+   "q": "chicken thighs",
+   "must": "thigh",
+   "ex": "breaded,cooked,nugget"
+  },
+  {
+   "group": "鸡肉",
+   "zh": "鸡胸 Chicken breast",
+   "q": "chicken breast",
+   "must": "chicken breast",
+   "ex": "canned,grills,chunks,nugget,strips,breaded,country style,cooked,burger,stuffed,cutlette"
+  },
+  {
+   "group": "鸡肉",
+   "zh": "鸡翅 Chicken wings",
+   "q": "chicken wings",
+   "must": "wing",
+   "ex": "breaded,fully cooked,pub style,salt & pepper,boneless,chunks,18.14,frozen,sauce"
+  },
+  {
+   "group": "海鲜",
+   "zh": "虾 Shrimp",
+   "q": "shrimp",
+   "must": "shrimp",
+   "ex": "surimi,salad,imitation,fish sticks,grillers,garlic shrimp,high liner,ring,chips,cracker,dumpling,sauce,skewer,marinated"
+  }
+ ]
+}
