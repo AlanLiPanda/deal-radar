@@ -1,0 +1,185 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Milk Radar</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one column, sticky control bar, stores as a distance-sorted ledger with a stock stripe on the left. */
+:root{
+  --bg:#f5f8fb; --panel:#ffffff; --ink:#15233a; --muted:#5b6b82; --line:#d9e1ec;
+  --accent:#1d5fc2; --accent-ink:#ffffff; --chip:#e8eef8;
+  --ok:#1f8a4c; --ok-bg:#e3f4ea; --low:#b26a00; --low-bg:#fff1d6; --out:#b3261e; --out-bg:#fde4e2; --na:#7a8699; --na-bg:#eceff3;
+  --display:"Sora",system-ui,sans-serif; --body:"IBM Plex Sans",system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f1622; --panel:#171f2d; --ink:#e8eef7; --muted:#9aa8bc; --line:#2a3546;
+  --accent:#6ea2ff; --accent-ink:#0b1424; --chip:#223049;
+  --ok:#5fd38a; --ok-bg:#15301f; --low:#f2b84b; --low-bg:#3a2a0c; --out:#ff8a80; --out-bg:#3d1714; --na:#8a97ab; --na-bg:#232b3a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1622; --panel:#171f2d; --ink:#e8eef7; --muted:#9aa8bc; --line:#2a3546;
+  --accent:#6ea2ff; --accent-ink:#0b1424; --chip:#223049;
+  --ok:#5fd38a; --ok-bg:#15301f; --low:#f2b84b; --low-bg:#3a2a0c; --out:#ff8a80; --out-bg:#3d1714; --na:#8a97ab; --na-bg:#232b3a; color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 var(--body)}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.wrap{max-width:720px;margin:0 auto;padding-block:14px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1{font:700 22px/1.15 var(--display);margin:0;letter-spacing:-.01em;text-wrap:balance}
+.sub{color:var(--muted);font-size:13px;margin:4px 0 0}
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:10px 8px;display:grid;gap:8px}
+.tabs{display:flex;gap:6px}
+.tab{flex:1;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:8px;padding:9px 6px;font:600 14px var(--body);cursor:pointer}
+.tab[aria-selected="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.tab small{display:block;font-weight:400;font-size:11px;opacity:.8}
+.ctrl{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.ctrl label{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:6px;min-width:0;flex:1}
+select{flex:1;min-width:0;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:8px;padding:7px 8px;font:14px var(--body)}
+.toggle{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--ink);white-space:nowrap;cursor:pointer}
+.toggle input{width:18px;height:18px;accent-color:var(--accent)}
+.summary{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin:10px 0 8px;font-size:13px;color:var(--muted);flex-wrap:wrap}
+.summary b{color:var(--ink);font-weight:600}
+button.refresh{border:1px solid var(--line);background:var(--panel);color:var(--accent);border-radius:999px;padding:4px 12px;font:600 12px var(--body);cursor:pointer}
+.list{display:grid;gap:8px;margin:0;padding:0;list-style:none}
+.row{background:var(--panel);border:1px solid var(--line);border-radius:10px;display:grid;grid-template-columns:6px 1fr auto;overflow:hidden}
+.stripe{background:var(--na)}
+.row[data-stock="OK"] .stripe{background:var(--ok)}.row[data-stock="LOW"] .stripe{background:var(--low)}.row[data-stock="OUT"] .stripe{background:var(--out)}
+.main{padding:10px 10px 10px 12px;min-width:0}
+.name{font-weight:600;font-size:15px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.banner{font-size:11px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;background:var(--chip);color:var(--muted);border-radius:4px;padding:1px 6px}
+.where{color:var(--muted);font-size:13px;margin-top:2px}
+.where b{color:var(--ink);font-weight:500;font-variant-numeric:tabular-nums}
+.hrs{font-size:13px;color:var(--ok);font-weight:500}.hrs.soon{color:var(--low);font-weight:600}.hrs.closed{color:var(--out)}
+.hist{font-size:12px;color:var(--muted);margin-top:4px;font-variant-numeric:tabular-nums}.h-out{color:var(--out);font-weight:600}.h-low{color:var(--low);font-weight:600}
+.side{padding:10px 12px 10px 0;display:grid;justify-items:end;align-content:center;gap:4px;text-align:right}
+.pill{font-size:12px;font-weight:600;border-radius:999px;padding:3px 9px;white-space:nowrap}
+.pill.OK{background:var(--ok-bg);color:var(--ok)}.pill.LOW{background:var(--low-bg);color:var(--low)}.pill.OUT{background:var(--out-bg);color:var(--out)}.pill.UNKNOWN{background:var(--na-bg);color:var(--na)}
+.price{font-variant-numeric:tabular-nums;font-size:14px;font-weight:600}
+.deal{font-size:11px;color:var(--low);font-weight:600}
+.links{grid-column:2/4;display:flex;gap:14px;padding:0 12px 10px;font-size:13px}
+.links{flex-wrap:wrap;row-gap:4px}.links a{color:var(--accent);text-decoration:none;font-weight:500;white-space:nowrap}
+.links a:hover,.links a:focus-visible{text-decoration:underline}
+.empty{padding:24px;text-align:center;color:var(--muted);background:var(--panel);border:1px dashed var(--line);border-radius:10px}
+.note{font-size:12px;color:var(--muted);margin-top:18px;line-height:1.5}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media (prefers-reduced-motion:no-preference){.row{transition:border-color .15s}}
+</style>
+<div class="wrap">
+  <h1>Milk Radar</h1>
+  <p class="sub">Lactantia UltraPur ultra-filtered milk, 20 g protein, 1.5 L. Stock at every Superstore, No Frills and Independent in BC.</p>
+
+  <div class="bar">
+    <div class="tabs" role="tablist" id="tabs"></div>
+    <div class="ctrl">
+      <label for="home">From <select id="home"></select></label>
+      <label class="toggle"><input type="checkbox" id="onlyStock" checked> In stock only</label>
+    </div>
+  </div>
+
+  <div class="summary"><span id="sum">Loading…</span><button class="refresh" id="refresh" type="button">Refresh</button></div>
+  <ul class="list" id="list"></ul>
+  <p class="note" id="note"></p>
+</div>
+<script>
+(function(){
+  var DATA=null, state={code:null, home:null, only:true};
+  try{ state.home=localStorage.getItem('mr.home'); state.code=localStorage.getItem('mr.code'); var o=localStorage.getItem('mr.only'); if(o!==null) state.only=o==='1'; }catch(e){}
+  var $=function(id){return document.getElementById(id)};
+  var LABEL={OK:'Listed in stock',LOW:'Low',OUT:'Out',UNKNOWN:'Not carried'};
+  var RANK={OK:0,LOW:1,OUT:2,UNKNOWN:3};
+
+  function km(a,b){ if(!a||!b||a.lat==null||b.lat==null) return null;
+    var R=6371,dLat=(b.lat-a.lat)*Math.PI/180,dLng=(b.lng-a.lng)*Math.PI/180,
+    s=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLng/2)*Math.sin(dLng/2);
+    return 2*R*Math.asin(Math.sqrt(s)); }
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+  function phone(p){ if(!p) return ''; var d=String(p).replace(/\D/g,''); return d.length===10?'('+d.slice(0,3)+') '+d.slice(3,6)+'-'+d.slice(6):p }
+  function when(iso){ var d=new Date(iso); return isNaN(d)?'':d.toLocaleString(undefined,{weekday:'short',hour:'numeric'}) }
+  function histLine(h){
+    if(!h||h.n<3) return '<div class="hist">History starts after a few hourly checks.</div>';
+    var parts=[];
+    if(h.out) parts.push('<span class="h-out">Out '+h.out+'×</span>');
+    if(h.low) parts.push('<span class="h-low">Low '+h.low+'×</span>');
+    var txt=parts.length?parts.join(' · ')+' in '+h.n+' checks this week':'Never out or low in '+h.n+' checks this week (count may not be tracking)';
+    if(h.lastOut) txt+=' · last out '+when(h.lastOut);
+    return '<div class="hist">'+txt+'</div>';
+  }
+  function parseT(str){ var m=/(\d{1,2}):(\d{2})\s*(AM|PM)/i.exec(str||''); if(!m) return null; var hh=+m[1]%12+(m[3].toUpperCase()==='PM'?12:0); return hh*60+(+m[2]); }
+  function fmtT(min){ var h=Math.floor(min/60)%24,m=min%60,ap=h>=12?'pm':'am',h12=h%12||12; return h12+(m?':'+(m<10?'0':'')+m:'')+' '+ap }
+  function hoursLine(s){
+    if(!s.hours) return '';
+    var parts=s.hours.split('-'); var open=parseT(parts[0]), close=parseT(parts[1]);
+    if(open==null||close==null) return '<span class="hrs">'+esc(s.hours)+'</span>';
+    var now=new Date(), cur=now.getHours()*60+now.getMinutes(); if(close<=open) close+=1440;
+    if(cur<open) return '<span class="hrs closed">Closed · opens '+fmtT(open)+'</span>';
+    if(cur>=close) return '<span class="hrs closed">Closed · was open '+fmtT(open)+'–'+fmtT(close)+' today</span>';
+    var left=close-cur;
+    if(left<=60) return '<span class="hrs soon">Closes in '+left+' min ('+fmtT(close)+')</span>';
+    return '<span class="hrs">Open until '+fmtT(close)+'</span>';
+  }
+  function money(v){return v==null?'':'$'+Number(v).toFixed(2)}
+  function ago(iso){ var d=new Date(iso); if(isNaN(d)) return ''; var m=Math.round((Date.now()-d)/60000);
+    var t=d.toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+    return t+(m<60?' ('+m+' min ago)':m<2880?' ('+Math.round(m/60)+' h ago)':''); }
+  function save(){ try{localStorage.setItem('mr.home',state.home);localStorage.setItem('mr.code',state.code);localStorage.setItem('mr.only',state.only?'1':'0')}catch(e){} }
+
+  function renderTabs(){
+    var t=$('tabs'); t.innerHTML='';
+    DATA.products.forEach(function(p){
+      var b=document.createElement('button'); b.type='button'; b.className='tab'; b.setAttribute('role','tab');
+      b.setAttribute('aria-selected', p.code===state.code?'true':'false'); b.id='tab-'+p.code;
+      var n=DATA.stores.filter(function(s){var i=s.items[p.code];return i&&i.stock==='OK'}).length;
+      b.innerHTML='<span>'+esc(p.fat)+'</span><small>'+n+' in stock</small>';
+      b.onclick=function(){state.code=p.code;save();renderTabs();renderList()};
+      t.appendChild(b);
+    });
+  }
+  function renderHome(){
+    var sel=$('home'); sel.innerHTML='';
+    DATA.stores.slice().sort(function(a,b){return (a.town+a.name).localeCompare(b.town+b.name)}).forEach(function(s){
+      var o=document.createElement('option'); o.value=s.id; o.textContent=s.town+' · '+(s.banner==='superstore'?'Superstore ':'')+s.name; if(s.id===state.home) o.selected=true; sel.appendChild(o);
+    });
+    sel.onchange=function(){state.home=sel.value;save();renderList()};
+  }
+  function renderList(){
+    var home=DATA.stores.find(function(s){return s.id===state.home})||DATA.stores[0];
+    var prod=DATA.products.find(function(p){return p.code===state.code});
+    var rows=DATA.stores.map(function(s){ var it=s.items[prod.code]||{stock:'UNKNOWN'}; return {s:s,it:it,d:km(home,s)}; });
+    var inStock=rows.filter(function(r){return r.it.stock==='OK'}).length, low=rows.filter(function(r){return r.it.stock==='LOW'}).length;
+    if(state.only) rows=rows.filter(function(r){return r.it.stock==='OK'||r.it.stock==='LOW'});
+    rows.sort(function(a,b){ return (a.d==null)-(b.d==null) || (a.d-b.d) || RANK[a.it.stock]-RANK[b.it.stock]; });
+    var near=rows.filter(function(r){return r.it.stock==='OK'&&r.d!=null&&r.d<=15}).length;
+    $('sum').innerHTML='<b>'+inStock+'</b> stores have '+esc(prod.fat)+(low?', <b>'+low+'</b> low':'')+' · <b>'+near+'</b> within 15 km of '+esc(home.name);
+    var ul=$('list'); ul.innerHTML='';
+    if(!rows.length){ ul.innerHTML='<li class="empty">No store in BC shows '+esc(prod.fat)+' in stock right now. Turn off "In stock only" to see every store.</li>'; }
+    rows.forEach(function(r){
+      var s=r.s,it=r.it,b=DATA.banners[s.banner];
+      var li=document.createElement('li'); li.className='row'; li.dataset.stock=it.stock;
+      var url=b.site+'/en/'+prod.slug+'/p/'+prod.code+'?storeId='+s.id;
+      var maps='https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(s.addr+', '+s.town+', BC '+(s.postal||''));
+      li.innerHTML='<div class="stripe"></div>'
+        +'<div class="main"><div class="name"><span>'+esc(s.name)+'</span><span class="banner">'+esc(b.label)+'</span></div>'
+        +'<div class="where">'+(r.d!=null?'<b>'+(r.d<10?r.d.toFixed(1):Math.round(r.d))+' km</b> · ':'')+esc(s.addr)+', '+esc(s.town)+'</div>'
+        +'<div class="where">'+hoursLine(s)+'</div>'
+        +histLine(it.hist)+'</div>'
+        +'<div class="side"><span class="pill '+it.stock+'">'+LABEL[it.stock]+'</span>'
+        +(it.price!=null?'<span class="price">'+money(it.price)+'</span>':'')
+        +(it.deal?'<span class="deal">'+esc(it.deal)+(it.dealExp?' · to '+esc(it.dealExp.slice(5))+'</span>':'</span>'):'')+'</div>'
+        +'<div class="links"><a href="'+maps+'" target="_blank" rel="noopener">Directions</a><a href="'+url+'" target="_blank" rel="noopener">Open on '+esc(b.label)+'</a>'+(s.phone&&!/^1?8(00|33|44|55|66|77|88)/.test(String(s.phone).replace(/\D/g,''))?'<a class="tel" href="tel:'+esc(String(s.phone).replace(/\D/g,''))+'">Call '+esc(phone(s.phone))+'</a>':'')+'</div>';
+      ul.appendChild(li);
+    });
+    $('note').textContent='"Listed in stock" is what Loblaw\u2019s online system reported '+ago(DATA.updatedAt)+'. That is the store\u2019s inventory count, not a look at the shelf: for a hoarded item the shelf can be empty while the count still says stock. Treat "Low" as a warning, and call the store before a long drive. "Not carried" means that store does not list this item.';
+  }
+  function load(){
+    $('sum').textContent='Checking…';
+    return fetch('data.json?t='+Date.now(),{cache:'no-store'}).then(function(r){return r.json()}).then(function(d){
+      DATA=d;
+      if(!d.products.some(function(p){return p.code===state.code})) state.code=d.products[0].code;
+      if(!d.stores.some(function(s){return s.id===state.home})) state.home='1561';
+      renderTabs(); renderHome(); renderList();
+    }).catch(function(e){ $('sum').textContent='Could not load stock data. Try Refresh.'; });
+  }
+  $('onlyStock').checked=state.only;
+  $('onlyStock').onchange=function(){state.only=this.checked;save();renderList()};
+  $('refresh').onclick=load;
+  load();
+})();
+</script>
